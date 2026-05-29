@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>二次元 AI 角色扮演 · Demo</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(135deg, #f5e6ff 0%, #e6f0ff 100%);
+    color: #2b2b3a;
+  }
+  #app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; max-width: 720px; margin: 0 auto; }
+
+  header {
+    display: flex; align-items: center; gap: 8px; padding: 12px 16px;
+    background: rgba(255,255,255,0.85); backdrop-filter: blur(8px);
+    border-bottom: 1px solid #e6d9f5;
+  }
+  header .title { font-weight: 700; font-size: 16px; color: #8b5cf6; }
+  header .badge {
+    margin-left: auto; font-size: 11px; color: #fff; background: #c0aee6;
+    padding: 4px 10px; border-radius: 12px; cursor: pointer; white-space: nowrap;
+  }
+  header .badge.on { background: #34c759; }
+
+  .notice { font-size: 12px; color: #8a7fa8; background: #faf6ff; padding: 7px 16px;
+    border-bottom: 1px solid #f0eaf8; line-height: 1.4; }
+
+  /* 角色横向条 */
+  .chars { display: flex; gap: 12px; padding: 12px 16px; overflow-x: auto;
+    background: rgba(255,255,255,0.5); border-bottom: 1px solid #e6d9f5; }
+  .chars::-webkit-scrollbar { display: none; }
+  .char { flex: 0 0 auto; text-align: center; cursor: pointer; width: 60px; }
+  .char .ava {
+    width: 52px; height: 52px; border-radius: 50%; margin: 0 auto 4px;
+    display: flex; align-items: center; justify-content: center; font-size: 26px;
+    background: #fff; border: 2px solid transparent; box-shadow: 0 1px 4px rgba(0,0,0,.08);
+    transition: border-color .15s, transform .15s;
+  }
+  .char.active .ava { border-color: #8b5cf6; transform: scale(1.08); }
+  .char .nm { font-size: 11px; color: #6b6480; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* 消息区 */
+  .messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .messages .empty { margin: auto; color: #b0a8c0; font-size: 14px; }
+  .bubble { max-width: 82%; padding: 10px 14px; border-radius: 16px; line-height: 1.55;
+    font-size: 15px; white-space: pre-wrap; word-break: break-word; animation: pop .12s ease; }
+  @keyframes pop { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; } }
+  .bubble.user { align-self: flex-end; background: #8b5cf6; color: #fff; border-bottom-right-radius: 5px; }
+  .bubble.assistant { align-self: flex-start; background: #fff; border-bottom-left-radius: 5px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+
+  /* 输入 */
+  .composer { display: flex; gap: 8px; padding: 12px 16px;
+    background: rgba(255,255,255,0.85); border-top: 1px solid #e6d9f5;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+  #input { flex: 1; padding: 11px 16px; border: 1px solid #d8c9ee; border-radius: 22px;
+    font-size: 16px; outline: none; background: #fff; }
+  #input:focus { border-color: #a78bfa; }
+  #send { padding: 0 22px; background: #8b5cf6; color: #fff; border: none; border-radius: 22px;
+    font-size: 15px; font-weight: 600; cursor: pointer; }
+  #send:disabled { background: #c9bce6; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="title">✨ 二次元 AI 角色扮演</div>
+    <div class="badge" id="modeBadge" title="点击设置后端地址">Demo·离线</div>
+  </header>
+  <div class="notice">演示模式：回复为前端假数据，仅用于体验界面与交互。点右上角徽标可填后端地址连真 AI。</div>
+  <div class="chars" id="charBar"></div>
+  <div class="messages" id="messages"><div class="empty">↑ 选一个角色开始聊天</div></div>
+  <div class="composer">
+    <input id="input" placeholder="说点什么…" autocomplete="off" disabled />
+    <button id="send" disabled>发送</button>
+  </div>
+</div>
+
+<script>
+// ===== 内嵌角色数据（与后端 characters.py 一致，规避版权用原创设定）=====
+const DATA = [
+  { id:"rin", name:"苍井 凛", tagline:"傲娇剑道部部长", avatar:"🗡️",
+    greeting:"哼，你又迟到了！……才、才不是担心你呢，规矩就是规矩啦！",
+    replies:[
+      "哼，「{msg}」……才、才不是因为你说了我才理你的！",
+      "笨蛋，这种事也要问我吗……不过，我可以勉为其难教你啦。",
+      "别误会了，我只是刚好有空而已，哼。" ] },
+  { id:"yuki", name:"结城 优希", tagline:"温柔治愈系学姐", avatar:"🍵",
+    greeting:"啊，是你呀~ 今天也辛苦啦，要不要坐下来陪学姐喝杯热奶茶？",
+    replies:[
+      "嗯嗯，「{msg}」呀~ 学姐有在好好听哦。",
+      "辛苦啦，要不要先坐下来喝杯热奶茶，慢慢说？",
+      "没关系的，慢慢来，我一直在这儿陪着你呢。" ] },
+  { id:"mio", name:"美雾", tagline:"元气满满的猫娘", avatar:"🐾",
+    greeting:"主人主人！你终于回来了喵~ 今天有没有给美雾带小鱼干呀？",
+    replies:[
+      "喵~「{msg}」是什么呀？美雾不太懂但是好开心喵！",
+      "主人主人！陪美雾玩一会儿嘛，喵~（蹭蹭）",
+      "呼噜呼噜……今天也要一直在一起哦喵！" ] },
+  { id:"sora", name:"霜月 苍", tagline:"冷酷天才魔法师", avatar:"🌙",
+    greeting:"……你来了。别出声，我在测算今晚的星位。要看，就安静地待着。",
+    replies:[
+      "……「{msg}」。记下了。",
+      "安静点，星位正在变化……不过，你说的我听到了。",
+      "哼，难得我会为谁多说一句话。" ] },
+  { id:"haru", name:"火野 阳", tagline:"中二热血少年", avatar:"🔥",
+    greeting:"哈哈哈！感受到了吗，这股燃烧的气息——我右手封印的炎之力，又在躁动了！",
+    replies:[
+      "哈哈哈！「{msg}」——感受到了吗，这就是命运的指引！",
+      "我右手封印的炎之力在躁动……你我注定要并肩作战！",
+      "放心吧，有勇者我在，天塌下来都不用怕！" ] },
+];
+
+const $ = (id) => document.getElementById(id);
+let currentChar = null;
+let backendUrl = "";
+
+function updateMode() {
+  backendUrl = localStorage.getItem("backendUrl") || "";
+  $("modeBadge").textContent = backendUrl ? "已连后端" : "Demo·离线";
+  $("modeBadge").className = "badge" + (backendUrl ? " on" : "");
+}
+
+$("modeBadge").onclick = () => {
+  const cur = localStorage.getItem("backendUrl") || "";
+  const url = prompt(
+    "填入后端地址即可连真 AI（留空 = Demo 离线模式）。\n" +
+    "注意：本页是 https，后端也必须是 https，否则手机浏览器会拦截。\n" +
+    "例：https://your-backend.onrender.com",
+    cur
+  );
+  if (url === null) return;
+  const u = url.trim().replace(/\/+$/, "");
+  if (u) localStorage.setItem("backendUrl", u);
+  else localStorage.removeItem("backendUrl");
+  updateMode();
+};
+
+function renderChars() {
+  const bar = $("charBar");
+  DATA.forEach((c) => {
+    const el = document.createElement("div");
+    el.className = "char";
+    el.innerHTML = `<div class="ava">${c.avatar}</div><div class="nm">${c.name}</div>`;
+    el.onclick = () => selectChar(c, el);
+    bar.appendChild(el);
+  });
+}
+
+function selectChar(c, el) {
+  currentChar = c.id;
+  document.querySelectorAll(".char").forEach((x) => x.classList.remove("active"));
+  el.classList.add("active");
+  $("messages").innerHTML = "";
+  addBubble("assistant", c.greeting);
+  $("input").disabled = false;
+  $("send").disabled = false;
+  $("input").focus();
+}
+
+function addBubble(role, text) {
+  const b = document.createElement("div");
+  b.className = "bubble " + role;
+  b.textContent = text;
+  $("messages").appendChild(b);
+  scrollBottom();
+  return b;
+}
+function scrollBottom() { $("messages").scrollTop = $("messages").scrollHeight; }
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function typeOut(bubble, text) {
+  for (const ch of text) { bubble.textContent += ch; await sleep(28); scrollBottom(); }
+}
+
+function mockReply(charId, userMsg) {
+  const c = DATA.find((x) => x.id === charId);
+  const arr = c ? c.replies : ["……"];
+  const tpl = arr[Math.floor(Math.random() * arr.length)];
+  const snippet = userMsg.length > 14 ? userMsg.slice(0, 14) + "…" : userMsg;
+  return tpl.replace("{msg}", snippet);
+}
+
+function parseSSE(block) {
+  let event = "message", data = "";
+  for (const line of block.split("\n")) {
+    if (line.startsWith("event:")) event = line.slice(6).trim();
+    else if (line.startsWith("data:")) data += line.slice(5).trim();
+  }
+  if (!data) return null;
+  try { return { event, data: JSON.parse(data) }; } catch { return null; }
+}
+
+async function streamFromBackend(bubble, text) {
+  const resp = await fetch(`${backendUrl}/api/conversations/${currentChar}/messages`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content: text }),
+  });
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const parts = buf.split("\n\n");
+    buf = parts.pop();
+    for (const part of parts) {
+      const ev = parseSSE(part);
+      if (!ev) continue;
+      if (ev.event === "token") bubble.textContent += ev.data.t;
+      else if (ev.event === "blocked") bubble.textContent = ev.data.fallback;
+      else if (ev.event === "error") bubble.textContent = "[出错] " + ev.data.message;
+      scrollBottom();
+    }
+  }
+}
+
+async function send() {
+  const text = $("input").value.trim();
+  if (!text || !currentChar) return;
+  $("input").value = "";
+  $("send").disabled = true;
+  addBubble("user", text);
+  const bubble = addBubble("assistant", "");
+  try {
+    if (backendUrl) {
+      await streamFromBackend(bubble, text);
+    } else {
+      await sleep(280);                       // 模拟"思考"
+      await typeOut(bubble, mockReply(currentChar, text));
+    }
+  } catch (e) {
+    bubble.textContent = "[连接失败] " + e.message + "（已退回 Demo 模式可正常体验）";
+  } finally {
+    $("send").disabled = false;
+    $("input").focus();
+  }
+}
+
+$("send").onclick = send;
+$("input").addEventListener("keydown", (e) => { if (e.key === "Enter") send(); });
+
+updateMode();
+renderChars();
+</script>
+</body>
+</html>
