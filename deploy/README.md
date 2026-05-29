@@ -15,25 +15,41 @@
 
 ---
 
+> 先决条件：本仓库已 clone 到你电脑上，且终端已 `cd` 进 `project004`（里面能看到
+> `Dockerfile` 和 `deploy/` 的那层就对了）。
+
 ## 方式 A：一键脚本（推荐）
 
-```bash
+**Windows（PowerShell）** — 需先装 [Git for Windows](https://git-scm.com/download/win)：
+```powershell
 # 1) 先在网页建一个空 Space：https://huggingface.co/new-space
 #    - Owner: 你；Space name: anime-rp-backend
 #    - SDK 选 【Docker】→ 【Blank】；可见性 Public
-# 2) 回到本仓库根目录，跑：
+# 2) 在 project004 根目录的 PowerShell 里跑：
+.\deploy\deploy_hf.ps1 -HfUser 你的用户名 -HfSpace anime-rp-backend -HfToken hf_xxx
+```
+> 若提示"无法加载脚本，因为禁止运行脚本"，先在当前窗口放行一次（仅本窗口、安全）：
+> `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`
+
+**macOS / Linux（bash）**：
+```bash
 HF_USER=你的用户名 HF_SPACE=anime-rp-backend HF_TOKEN=hf_xxx ./deploy/deploy_hf.sh
 ```
 
 脚本会把 `Dockerfile + backend/ + README_HF.md` 推到 Space，HF 自动构建。
 
-## 方式 B：纯网页拖拽（不想用命令行）
+## 方式 B：纯网页拖拽（零命令行，Windows 最省事）
+
+完全不碰命令行，全程点网页 —— 如果你不想装 Git，**推荐走这条**：
 
 1. 建 Space（同上，SDK 选 Docker）
-2. 在 Space 的 **Files → Add file → Upload** 里上传：
+2. 在 Space 的 **Files → Add file → Upload files** 里上传：
    - `Dockerfile`
    - `README_HF.md` → **改名为 `README.md`** 上传（HF 靠它的 YAML 配置 Space）
-   - 整个 `backend/` 文件夹（不含 `.env`）
+   - `backend/` 文件夹里的所有内容（保持 `backend/app/...` 的目录结构；**不要传 `.env`**）
+
+> 文件可以从 GitHub 仓库网页上直接下载：进 https://github.com/ZL-admin/project004
+> （分支 `claude/busy-clarke-TFGgs`）→ Code → Download ZIP，解压后就是这些文件。
 
 ---
 
