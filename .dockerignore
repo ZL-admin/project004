@@ -1,0 +1,11 @@
+# 构建忽略：缩小镜像、加快构建
+**/__pycache__/
+**/*.pyc
+.git/
+.venv/
+venv/
+docs/
+*.md
+backend/.env
+backend/.env.local
+.github/
