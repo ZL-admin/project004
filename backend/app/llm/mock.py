@@ -1,6 +1,6 @@
-"""MockProvider：无需任何 key/网络，返回假数据并模拟流式。
+"""MockProvider: returns canned data and simulates streaming, no key/network needed.
 
-用于零成本调通整条管线和前端。LLM_BACKEND=mock
+Used to exercise the whole pipeline and frontend at zero cost. LLM_BACKEND=mock
 """
 import asyncio
 from typing import AsyncIterator
@@ -14,13 +14,13 @@ class MockProvider(LLMProvider):
         user = next(
             (m.content for m in reversed(messages) if m.role == "user"), ""
         )
-        # 暴露收到的上下文规模，方便验证「记忆/历史」确实拼进了 prompt
-        history_turns = max(len(messages) - 2, 0)  # 扣掉 system 和本次 user
+        # Expose the received context size to verify memory/history is in the prompt
+        history_turns = max(len(messages) - 2, 0)  # minus system and current user
         reply = (
-            f"（mock·上下文{len(messages)}条/历史{history_turns}条）"
-            f"我听到你说「{user}」啦~ "
-            f"把 LLM_BACKEND 改成 ollama 或 openai 就能真聊咯。"
+            f"(mock · context {len(messages)} msgs / history {history_turns}) "
+            f"I heard you say \"{user}\"~ "
+            f"Set LLM_BACKEND to ollama or openai for real chat."
         )
         for ch in reply:
-            await asyncio.sleep(0.02)  # 模拟逐字流式
+            await asyncio.sleep(0.02)  # simulate token-by-token streaming
             yield ch
