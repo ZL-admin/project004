@@ -1,14 +1,14 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<title>二次元 AI 角色扮演 · Demo</title>
+<title>Anime AI Roleplay · Chat with your favorite characters</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
   html, body { height: 100%; }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     background: linear-gradient(135deg, #f5e6ff 0%, #e6f0ff 100%);
     color: #2b2b3a;
   }
@@ -29,11 +29,11 @@
   .notice { font-size: 12px; color: #8a7fa8; background: #faf6ff; padding: 7px 16px;
     border-bottom: 1px solid #f0eaf8; line-height: 1.4; }
 
-  /* 角色横向条 */
+  /* Character bar */
   .chars { display: flex; gap: 12px; padding: 12px 16px; overflow-x: auto;
     background: rgba(255,255,255,0.5); border-bottom: 1px solid #e6d9f5; }
   .chars::-webkit-scrollbar { display: none; }
-  .char { flex: 0 0 auto; text-align: center; cursor: pointer; width: 60px; }
+  .char { flex: 0 0 auto; text-align: center; cursor: pointer; width: 64px; }
   .char .ava {
     width: 52px; height: 52px; border-radius: 50%; margin: 0 auto 4px;
     display: flex; align-items: center; justify-content: center; font-size: 26px;
@@ -43,7 +43,7 @@
   .char.active .ava { border-color: #8b5cf6; transform: scale(1.08); }
   .char .nm { font-size: 11px; color: #6b6480; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-  /* 消息区 */
+  /* Messages */
   .messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
   .messages .empty { margin: auto; color: #b0a8c0; font-size: 14px; }
   .bubble { max-width: 82%; padding: 10px 14px; border-radius: 16px; line-height: 1.55;
@@ -53,7 +53,7 @@
   .bubble.assistant { align-self: flex-start; background: #fff; border-bottom-left-radius: 5px;
     box-shadow: 0 1px 3px rgba(0,0,0,.06); }
 
-  /* 输入 */
+  /* Composer */
   .composer { display: flex; gap: 8px; padding: 12px 16px;
     background: rgba(255,255,255,0.85); border-top: 1px solid #e6d9f5;
     padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
@@ -68,51 +68,54 @@
 <body>
 <div id="app">
   <header>
-    <div class="title">✨ 二次元 AI 角色扮演</div>
-    <div class="badge" id="modeBadge" title="点击设置后端地址">Demo·离线</div>
+    <div class="title">✨ Anime AI Roleplay</div>
+    <div class="badge" id="modeBadge" title="Tap to set backend URL">Demo · Offline</div>
   </header>
-  <div class="notice">演示模式：回复为前端假数据，仅用于体验界面与交互。点右上角徽标可填后端地址连真 AI。</div>
+  <div class="notice" id="notice">Connecting to AI…</div>
   <div class="chars" id="charBar"></div>
-  <div class="messages" id="messages"><div class="empty">↑ 选一个角色开始聊天</div></div>
+  <div class="messages" id="messages"><div class="empty">↑ Pick a character to start chatting</div></div>
   <div class="composer">
-    <input id="input" placeholder="说点什么…" autocomplete="off" disabled />
-    <button id="send" disabled>发送</button>
+    <input id="input" placeholder="Say something…" autocomplete="off" disabled />
+    <button id="send" disabled>Send</button>
   </div>
 </div>
 
 <script>
-// ===== 内嵌角色数据（与后端 characters.py 一致，规避版权用原创设定）=====
+// ===== Default backend (the user's deployed Hugging Face Space) =====
+const DEFAULT_BACKEND = "https://zl-admin-anime-rp-backend.hf.space";
+
+// ===== Embedded character data (mirrors backend characters.py; original designs to avoid IP issues) =====
 const DATA = [
-  { id:"rin", name:"苍井 凛", tagline:"傲娇剑道部部长", avatar:"🗡️",
-    greeting:"哼，你又迟到了！……才、才不是担心你呢，规矩就是规矩啦！",
+  { id:"rin", name:"Rin Aoi", tagline:"Tsundere kendo captain", avatar:"🗡️",
+    greeting:"Hmph, you're late again! ...I-it's not like I was worried about you! Rules are rules, okay?",
     replies:[
-      "哼，「{msg}」……才、才不是因为你说了我才理你的！",
-      "笨蛋，这种事也要问我吗……不过，我可以勉为其难教你啦。",
-      "别误会了，我只是刚好有空而已，哼。" ] },
-  { id:"yuki", name:"结城 优希", tagline:"温柔治愈系学姐", avatar:"🍵",
-    greeting:"啊，是你呀~ 今天也辛苦啦，要不要坐下来陪学姐喝杯热奶茶？",
+      "Hmph, \"{msg}\"... I-it's not like I'm answering just because you said so!",
+      "Idiot, you have to ask me even this? ...Well, I guess I can teach you, just this once.",
+      "D-don't get the wrong idea, I just happened to be free, that's all. Hmph." ] },
+  { id:"yuki", name:"Yuki Yuuki", tagline:"Gentle, healing senpai", avatar:"🍵",
+    greeting:"Ah, it's you~ You worked hard today. Want to sit down and have a warm cup of milk tea with me?",
     replies:[
-      "嗯嗯，「{msg}」呀~ 学姐有在好好听哦。",
-      "辛苦啦，要不要先坐下来喝杯热奶茶，慢慢说？",
-      "没关系的，慢慢来，我一直在这儿陪着你呢。" ] },
-  { id:"mio", name:"美雾", tagline:"元气满满的猫娘", avatar:"🐾",
-    greeting:"主人主人！你终于回来了喵~ 今天有没有给美雾带小鱼干呀？",
+      "Mm-hmm, \"{msg}\", I see~ Your senpai is listening carefully.",
+      "You've worked so hard. Why don't you sit down first and tell me slowly over some tea?",
+      "It's okay, take your time. I'll always be right here with you." ] },
+  { id:"mio", name:"Mio", tagline:"Energetic catgirl", avatar:"🐾",
+    greeting:"Master, master! You're finally back, nya~ Did you bring Mio any dried fish today?",
     replies:[
-      "喵~「{msg}」是什么呀？美雾不太懂但是好开心喵！",
-      "主人主人！陪美雾玩一会儿嘛，喵~（蹭蹭）",
-      "呼噜呼噜……今天也要一直在一起哦喵！" ] },
-  { id:"sora", name:"霜月 苍", tagline:"冷酷天才魔法师", avatar:"🌙",
-    greeting:"……你来了。别出声，我在测算今晚的星位。要看，就安静地待着。",
+      "Nya~ what's \"{msg}\"? Mio doesn't quite get it but I'm so happy, nya!",
+      "Master, master! Play with Mio for a bit, nya~ (nuzzles)",
+      "Purr purr... let's stay together forever today too, nya!" ] },
+  { id:"sora", name:"Sora Shimotsuki", tagline:"Cool genius mage", avatar:"🌙",
+    greeting:"...You came. Don't make a sound, I'm calculating tonight's star alignment. If you want to watch, stay quiet.",
     replies:[
-      "……「{msg}」。记下了。",
-      "安静点，星位正在变化……不过，你说的我听到了。",
-      "哼，难得我会为谁多说一句话。" ] },
-  { id:"haru", name:"火野 阳", tagline:"中二热血少年", avatar:"🔥",
-    greeting:"哈哈哈！感受到了吗，这股燃烧的气息——我右手封印的炎之力，又在躁动了！",
+      "...\"{msg}\". Noted.",
+      "Quiet. The stars are shifting... but I heard what you said.",
+      "Hmph. It's rare for me to say an extra word for anyone." ] },
+  { id:"haru", name:"Haru Hino", tagline:"Hot-blooded chuuni hero", avatar:"🔥",
+    greeting:"Hahaha! Can you feel it — this burning aura? The flame power sealed in my right hand is stirring again!",
     replies:[
-      "哈哈哈！「{msg}」——感受到了吗，这就是命运的指引！",
-      "我右手封印的炎之力在躁动……你我注定要并肩作战！",
-      "放心吧，有勇者我在，天塌下来都不用怕！" ] },
+      "Hahaha! \"{msg}\" — can you feel it? This is the guidance of fate!",
+      "The flame sealed in my right hand is roaring... You and I are destined to fight side by side!",
+      "Don't worry, with a hero like me here, we'll be fine even if the sky falls!" ] },
 ];
 
 const $ = (id) => document.getElementById(id);
@@ -120,23 +123,30 @@ let currentChar = null;
 let backendUrl = "";
 
 function updateMode() {
-  backendUrl = localStorage.getItem("backendUrl") || "";
-  $("modeBadge").textContent = backendUrl ? "已连后端" : "Demo·离线";
-  $("modeBadge").className = "badge" + (backendUrl ? " on" : "");
+  // Default to the deployed backend; user can still override or clear via the badge.
+  const stored = localStorage.getItem("backendUrl");
+  backendUrl = (stored === null ? DEFAULT_BACKEND : stored);
+  const live = !!backendUrl;
+  $("modeBadge").textContent = live ? "Live AI" : "Demo · Offline";
+  $("modeBadge").className = "badge" + (live ? " on" : "");
+  $("notice").textContent = live
+    ? "Connected to live AI. First reply may take ~10s if the server is waking up."
+    : "Demo mode: replies are canned front-end text. Tap the badge to connect live AI.";
 }
 
 $("modeBadge").onclick = () => {
-  const cur = localStorage.getItem("backendUrl") || "";
+  const stored = localStorage.getItem("backendUrl");
+  const cur = (stored === null ? DEFAULT_BACKEND : stored);
   const url = prompt(
-    "填入后端地址即可连真 AI（留空 = Demo 离线模式）。\n" +
-    "注意：本页是 https，后端也必须是 https，否则手机浏览器会拦截。\n" +
-    "例：https://your-backend.onrender.com",
+    "Backend URL for live AI (clear the box for Demo offline mode).\n" +
+    "Note: this page is https, so the backend must be https too.\n" +
+    "Example: https://zl-admin-anime-rp-backend.hf.space",
     cur
   );
   if (url === null) return;
   const u = url.trim().replace(/\/+$/, "");
   if (u) localStorage.setItem("backendUrl", u);
-  else localStorage.removeItem("backendUrl");
+  else localStorage.setItem("backendUrl", "");   // empty string = explicit Demo mode
   updateMode();
 };
 
@@ -179,9 +189,9 @@ async function typeOut(bubble, text) {
 
 function mockReply(charId, userMsg) {
   const c = DATA.find((x) => x.id === charId);
-  const arr = c ? c.replies : ["……"];
+  const arr = c ? c.replies : ["..."];
   const tpl = arr[Math.floor(Math.random() * arr.length)];
-  const snippet = userMsg.length > 14 ? userMsg.slice(0, 14) + "…" : userMsg;
+  const snippet = userMsg.length > 20 ? userMsg.slice(0, 20) + "…" : userMsg;
   return tpl.replace("{msg}", snippet);
 }
 
@@ -201,6 +211,7 @@ async function streamFromBackend(bubble, text) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ content: text }),
   });
+  if (!resp.ok) throw new Error("HTTP " + resp.status);
   const reader = resp.body.getReader();
   const decoder = new TextDecoder();
   let buf = "";
@@ -215,7 +226,7 @@ async function streamFromBackend(bubble, text) {
       if (!ev) continue;
       if (ev.event === "token") bubble.textContent += ev.data.t;
       else if (ev.event === "blocked") bubble.textContent = ev.data.fallback;
-      else if (ev.event === "error") bubble.textContent = "[出错] " + ev.data.message;
+      else if (ev.event === "error") bubble.textContent = "[Error] " + ev.data.message;
       scrollBottom();
     }
   }
@@ -232,11 +243,12 @@ async function send() {
     if (backendUrl) {
       await streamFromBackend(bubble, text);
     } else {
-      await sleep(280);                       // 模拟"思考"
+      await sleep(280);                       // simulate "thinking"
       await typeOut(bubble, mockReply(currentChar, text));
     }
   } catch (e) {
-    bubble.textContent = "[连接失败] " + e.message + "（已退回 Demo 模式可正常体验）";
+    bubble.textContent = "[Connection failed] " + e.message +
+      " — the server may be asleep; please try again in a moment.";
   } finally {
     $("send").disabled = false;
     $("input").focus();
