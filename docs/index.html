@@ -21,7 +21,7 @@
   }
   header .title { font-weight: 700; font-size: 16px; color: #8b5cf6; }
   header .badge {
-    margin-left: auto; font-size: 11px; color: #fff; background: #c0aee6;
+    font-size: 11px; color: #fff; background: #c0aee6;
     padding: 4px 10px; border-radius: 12px; cursor: pointer; white-space: nowrap;
   }
   header .badge.on { background: #34c759; }
@@ -63,18 +63,41 @@
   #send { padding: 0 22px; background: #8b5cf6; color: #fff; border: none; border-radius: 22px;
     font-size: 15px; font-weight: 600; cursor: pointer; }
   #send:disabled { background: #c9bce6; }
+
+  /* Header voice-reply toggle */
+  .hdr-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .voicetoggle { border: none; background: #efe8fb; color: #8b5cf6; font-size: 16px;
+    width: 32px; height: 32px; border-radius: 50%; cursor: pointer; line-height: 1;
+    display: flex; align-items: center; justify-content: center; transition: background .15s; }
+  .voicetoggle.on { background: #8b5cf6; }
+
+  /* Mic button in composer */
+  #mic { flex: 0 0 auto; width: 44px; border: 1px solid #d8c9ee; background: #fff;
+    border-radius: 22px; font-size: 19px; cursor: pointer; color: #8b5cf6;
+    display: flex; align-items: center; justify-content: center; transition: background .15s; }
+  #mic.listening { background: #ff3b30; color: #fff; border-color: #ff3b30;
+    animation: micpulse 1s ease-in-out infinite; }
+  @keyframes micpulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255,59,48,.45); }
+    50% { box-shadow: 0 0 0 7px rgba(255,59,48,0); } }
+
+  /* Tap an assistant bubble to replay it aloud */
+  .bubble.assistant.speakable { cursor: pointer; }
 </style>
 </head>
 <body>
 <div id="app">
   <header>
     <div class="title">✨ Anime AI Roleplay</div>
-    <div class="badge" id="modeBadge" title="Tap to set backend URL">Demo · Offline</div>
+    <div class="hdr-actions">
+      <button class="voicetoggle" id="voiceToggle" title="Voice reply (tap to toggle)">🔇</button>
+      <div class="badge" id="modeBadge" title="Tap to set backend URL">Demo · Offline</div>
+    </div>
   </header>
   <div class="notice" id="notice">Connecting to AI…</div>
   <div class="chars" id="charBar"></div>
   <div class="messages" id="messages"><div class="empty">↑ Pick a character to start chatting</div></div>
   <div class="composer">
+    <button id="mic" title="Tap to speak" disabled>🎤</button>
     <input id="input" placeholder="Say something…" autocomplete="off" disabled />
     <button id="send" disabled>Send</button>
   </div>
@@ -169,6 +192,7 @@ function selectChar(c, el) {
   addBubble("assistant", c.greeting);
   $("input").disabled = false;
   $("send").disabled = false;
+  $("mic").disabled = false;
   $("input").focus();
 }
 
@@ -176,6 +200,11 @@ function addBubble(role, text) {
   const b = document.createElement("div");
   b.className = "bubble " + role;
   b.textContent = text;
+  if (role === "assistant") {
+    b.classList.add("speakable");
+    b.title = "Tap to hear this aloud";
+    b.addEventListener("click", () => speak(b.textContent, true));
+  }
   $("messages").appendChild(b);
   scrollBottom();
   return b;
@@ -246,6 +275,7 @@ async function send() {
       await sleep(280);                       // simulate "thinking"
       await typeOut(bubble, mockReply(currentChar, text));
     }
+    speak(bubble.textContent);                 // read the reply aloud if 🔊 is on
   } catch (e) {
     bubble.textContent = "[Connection failed] " + e.message +
       " — the server may be asleep; please try again in a moment.";
@@ -253,6 +283,87 @@ async function send() {
     $("send").disabled = false;
     $("input").focus();
   }
+}
+
+// ===== Voice: speech-to-text (mic) + text-to-speech (read replies aloud) =====
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const synth = window.speechSynthesis;
+let recog = null, listening = false, voiceOn = false, ttsUnlocked = false;
+
+// Mobile browsers block audio until a user gesture — prime the synth on first tap.
+function unlockTTS() {
+  if (ttsUnlocked || !synth) return;
+  try { synth.speak(new SpeechSynthesisUtterance("")); ttsUnlocked = true; } catch {}
+}
+
+function pickVoice() {
+  if (!synth) return null;
+  const voices = synth.getVoices() || [];
+  return voices.find((v) => /en[-_]US/i.test(v.lang) && /female|samantha|google|zira|aria/i.test(v.name))
+      || voices.find((v) => /^en/i.test(v.lang))
+      || null;
+}
+
+function speak(text, force) {
+  if (!synth || !text) return;
+  if (!voiceOn && !force) return;            // auto-play only when 🔊 is on; tap-to-hear forces it
+  synth.cancel();                            // stop whatever is currently talking
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = "en-US"; u.rate = 1.0; u.pitch = 1.05;
+  const v = pickVoice(); if (v) u.voice = v;
+  synth.speak(u);
+}
+
+// Header voice-reply toggle -------------------------------------------------
+if (synth) {
+  if (synth.onvoiceschanged !== undefined) synth.onvoiceschanged = pickVoice; // warm voice list
+  $("voiceToggle").onclick = () => {
+    voiceOn = !voiceOn;
+    unlockTTS();                             // this tap is our user gesture
+    $("voiceToggle").textContent = voiceOn ? "🔊" : "🔇";
+    $("voiceToggle").classList.toggle("on", voiceOn);
+    if (!voiceOn) synth.cancel();
+  };
+} else {
+  $("voiceToggle").style.display = "none";   // browser can't speak → hide toggle
+}
+
+// Mic / speech recognition --------------------------------------------------
+function setMicUI() {
+  $("mic").classList.toggle("listening", listening);
+  $("input").placeholder = listening ? "Listening…" : "Say something…";
+}
+
+if (SR) {
+  recog = new SR();
+  recog.lang = "en-US";
+  recog.interimResults = true;
+  recog.continuous = false;
+  recog.onresult = (e) => {
+    let interim = "", final = "";
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const r = e.results[i];
+      if (r.isFinal) final += r[0].transcript; else interim += r[0].transcript;
+    }
+    $("input").value = final || interim;     // live transcription into the box
+    if (final.trim()) {                      // complete phrase → send hands-free
+      listening = false; setMicUI();
+      try { recog.stop(); } catch (_) {}
+      send();
+    }
+  };
+  recog.onend = () => { listening = false; setMicUI(); };
+  recog.onerror = () => { listening = false; setMicUI(); };
+
+  $("mic").onclick = () => {
+    if (!currentChar) return;
+    unlockTTS();                             // mic tap is also a user gesture
+    if (listening) { try { recog.stop(); } catch (_) {} return; }
+    $("input").value = "";
+    try { recog.start(); listening = true; setMicUI(); } catch (_) {}
+  };
+} else {
+  $("mic").style.display = "none";           // no speech recognition → hide mic
 }
 
 $("send").onclick = send;
